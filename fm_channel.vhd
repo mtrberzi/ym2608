@@ -50,68 +50,76 @@ architecture Behavioral of fm_channel is
 	);
 	type algorithm_idx_type is array(0 to 5) of unsigned(1 downto 0);
 	-- algorithm definitions and table
+	
+	-- in the original code, the indices correspond to table entries like this:
+	-- idx 0 gets table entry 0
+	-- idx 1 gets table entry 2
+	-- idx 2 gets table entry 4
+	-- idx 3 gets table entry 1
+	-- idx 4 gets table entry 3
+	-- idx 5 gets table entry 5
 	constant algorithm0: algorithm_idx_type := (
 		0 => to_unsigned(0, 2),
+		3 => to_unsigned(1, 2),
 		1 => to_unsigned(1, 2),
-		2 => to_unsigned(1, 2),
-		3 => to_unsigned(2, 2),
 		4 => to_unsigned(2, 2),
+		2 => to_unsigned(2, 2),
 		5 => to_unsigned(3, 2)
 	);
 	constant algorithm1: algorithm_idx_type := (
 		0 => to_unsigned(1, 2),
+		3 => to_unsigned(0, 2),
 		1 => to_unsigned(0, 2),
-		2 => to_unsigned(0, 2),
-		3 => to_unsigned(1, 2),
 		4 => to_unsigned(1, 2),
+		2 => to_unsigned(1, 2),
 		5 => to_unsigned(2, 2)
 	);
 	constant algorithm2: algorithm_idx_type := (
 		0 => to_unsigned(1, 2),
+		3 => to_unsigned(1, 2),
 		1 => to_unsigned(1, 2),
-		2 => to_unsigned(1, 2),
-		3 => to_unsigned(0, 2),
 		4 => to_unsigned(0, 2),
+		2 => to_unsigned(0, 2),
 		5 => to_unsigned(2, 2)
 	);
 	constant algorithm3: algorithm_idx_type := (
 		0 => to_unsigned(0, 2),
-		1 => to_unsigned(1, 2),
-		2 => to_unsigned(2, 2),
 		3 => to_unsigned(1, 2),
+		1 => to_unsigned(2, 2),
 		4 => to_unsigned(1, 2),
+		2 => to_unsigned(1, 2),
 		5 => to_unsigned(2, 2)
 	);
 	constant algorithm4: algorithm_idx_type := (
 		0 => to_unsigned(0, 2),
-		1 => to_unsigned(1, 2),
-		2 => to_unsigned(2, 2),
-		3 => to_unsigned(2, 2),
+		3 => to_unsigned(1, 2),
+		1 => to_unsigned(2, 2),
 		4 => to_unsigned(2, 2),
+		2 => to_unsigned(2, 2),
 		5 => to_unsigned(1, 2)
 	);
 	constant algorithm5: algorithm_idx_type := (
 		0 => to_unsigned(0, 2),
-		1 => to_unsigned(1, 2),
-		2 => to_unsigned(0, 2),
 		3 => to_unsigned(1, 2),
-		4 => to_unsigned(0, 2),
+		1 => to_unsigned(0, 2),
+		4 => to_unsigned(1, 2),
+		2 => to_unsigned(0, 2),
 		5 => to_unsigned(1, 2)
 	);
 	constant algorithm6: algorithm_idx_type := (
 		0 => to_unsigned(0, 2),
-		1 => to_unsigned(1, 2),
-		2 => to_unsigned(2, 2),
 		3 => to_unsigned(1, 2),
-		4 => to_unsigned(2, 2),
+		1 => to_unsigned(2, 2),
+		4 => to_unsigned(1, 2),
+		2 => to_unsigned(2, 2),
 		5 => to_unsigned(1, 2)
 	);
 	constant algorithm7: algorithm_idx_type := (
 		0 => to_unsigned(1, 2),
-		1 => to_unsigned(0, 2),
-		2 => to_unsigned(1, 2),
 		3 => to_unsigned(0, 2),
-		4 => to_unsigned(1, 2),
+		1 => to_unsigned(1, 2),
+		4 => to_unsigned(0, 2),
+		2 => to_unsigned(1, 2),
 		5 => to_unsigned(0, 2)
 	);
 	-- notetab for bn
@@ -208,7 +216,9 @@ architecture Behavioral of fm_channel is
 	
 	type operator4_reg_type is array(0 to 3) of operator_reg_type;
 	
-	type channel_state_type is (state_idle, state_prepare);
+	type channel_state_type is (state_idle, state_prepare, 
+		state_op0, state_phase0, state_op1, state_phase1, state_op2, state_phase2, state_op3, state_phase3,
+		state_accumulate, state_output);
 	type channel_reg_type is record
 		state: channel_state_type;
 		-- (15 downto 8) is the fnum2 register, with block number;
@@ -221,6 +231,14 @@ architecture Behavioral of fm_channel is
 		opParam: operator4_reg_type; -- exposed register space for operator parameters
 		paramChanged: std_logic_vector(3 downto 0); -- flags for each operator
 		opUpdate: std_logic_vector(3 downto 0); -- strobed high when preparing channel to request EG/PG reload
+		nxtOp: std_logic_vector(3 downto 0); -- strobed high to clock each operator
+		nxtPhase: std_logic_vector(3 downto 0); --strobed high to clock each phase generator
+		op1_input: signed(17 downto 0);
+		op2_input: signed(17 downto 0);
+		op3_input: signed(17 downto 0);
+		output_tmp: signed(17 downto 0);
+		output: signed(17 downto 0);
+		valid: std_logic;
 	end record;
 	
 	constant channel_reg_reset: channel_reg_type := (
@@ -232,14 +250,76 @@ architecture Behavioral of fm_channel is
 		algorithmIdx => algorithm0,
 		opParam => (others => operator_reg_reset),
 		paramChanged => "0000",
-		opUpdate => "0000"
+		opUpdate => "0000",
+		nxtOp => "0000",
+		nxtPhase => "0000",
+		op1_input => to_signed(0, 18),
+		op2_input => to_signed(0, 18),
+		op3_input => to_signed(0, 18),
+		output_tmp => to_signed(0, 18),
+		output => to_signed(0, 18),
+		valid => '0'
 	);
 	
 	signal reg: channel_reg_type := channel_reg_reset;
 	signal ci_next: channel_reg_type;
+	
+	component operator_fb port (
+		clk: in std_logic;
+		rst: in std_logic;
+		
+		nxt: in std_logic;
+		fb: unsigned(4 downto 0);
+		phase: in unsigned(31 downto 0);
+		envelope: in unsigned(15 downto 0);
+		
+		output: out signed(17 downto 0);
+		valid: out std_logic
+	); end component;
+	
+	component operator port (
+		clk: in std_logic;
+		rst: in std_logic;
+		
+		nxt: in std_logic;
+		input: in signed(31 downto 0);
+		phase: in unsigned(31 downto 0);
+		envelope: in unsigned(15 downto 0);
+		
+		output: out signed(17 downto 0);
+		valid: out std_logic
+	); end component;
+	
+	component phase_generator Port ( 
+		clk : in  STD_LOGIC;
+		rst : in  STD_LOGIC;
+		
+		dp: in unsigned(17 downto 0);
+		detune: in unsigned(7 downto 0);
+		bn: in unsigned(4 downto 0);
+		multiple: in unsigned(3 downto 0);
+		
+		update: in std_logic;
+		nxt: in std_logic;
+		phase: out unsigned(31 downto 0)
+	); end component;
+	signal op0_phase: unsigned(31 downto 0);
+	signal op1_phase: unsigned(31 downto 0);
+	signal op2_phase: unsigned(31 downto 0);
+	signal op3_phase: unsigned(31 downto 0);
+	
+	-- output/valid from operators
+	signal opValid: std_logic_vector(3 downto 0);
+	signal op1_input: signed(31 downto 0);
+	signal op2_input: signed(31 downto 0);
+	signal op3_input: signed(31 downto 0);
+	signal op0_output: signed(17 downto 0);
+	signal op1_output: signed(17 downto 0);
+	signal op2_output: signed(17 downto 0);
+	signal op3_output: signed(17 downto 0);
 begin
 
-COMB: process(reg, rst, addr, we, data, nxt)
+COMB: process(reg, rst, addr, we, data, nxt, opValid, op0_output, op1_output, op2_output, op3_output)
 	variable ci: channel_reg_type;
 	
 	variable dp: unsigned(17 downto 0); -- as a function of block/fnum
@@ -250,6 +330,12 @@ COMB: process(reg, rst, addr, we, data, nxt)
 	variable dp_shift_amt: integer;
 begin
 	ci := reg;
+	-- self-clearing
+	ci.opUpdate := "0000";
+	ci.nxtOp := "0000";
+	ci.nxtPhase := "0000";
+	ci.valid := '0';
+	
 	target_addr := addr(7 downto 2) & "00";
 	if(rst = '1') then
 		ci := channel_reg_reset;
@@ -313,10 +399,70 @@ begin
 							ci.opUpdate(I) := '1';
 						end if;
 					end loop;
+					ci.sampleBuffer := buffer4_reset;
 					ci.state := state_prepare;
 				end if;
 			when state_prepare =>
-				null; -- FIXME
+				-- TODO clock envelope generators in parallel
+				ci.state := state_op0;
+			when state_op0 =>
+				ci.nxtOp(0) := '1';
+				ci.state := state_phase0;
+			when state_phase0 =>
+				-- wait for operator 0 to be valid
+				if(opValid(0) = '1') then
+					-- store output 0 in buffer 0
+					ci.sampleBuffer(0) := op0_output;
+					ci.nxtPhase(0) := '1';
+					ci.state := state_op1;
+				end if;
+			when state_op1 =>
+				-- set input 1 to buffer[algorithm[0]]
+				ci.op1_input := reg.sampleBuffer(to_integer(reg.algorithmIdx(0)));
+				ci.nxtOp(1) := '1';
+				ci.state := state_phase1;
+			when state_phase1 =>
+				-- wait for operator 1 to be valid
+				if(opValid(1) = '1') then
+					-- ACCUMULATE output from operator 1 into buffer[algorithm[3]]
+					ci.sampleBuffer(to_integer(reg.algorithmIdx(3))) := reg.sampleBuffer(to_integer(reg.algorithmIdx(3))) + op1_output;
+					ci.nxtPhase(1) := '1';
+					ci.state := state_op2;
+				end if;
+			when state_op2 =>
+				-- set input 2 to buffer[algorithm[1]]
+				ci.op2_input := reg.sampleBuffer(to_integer(reg.algorithmIdx(1)));
+				ci.nxtOp(2) := '1';
+				ci.state := state_phase2;
+			when state_phase2 =>
+				-- wait for operator 2 to be valid
+				if(opValid(2) = '1') then
+					-- accumulate output from operator 2 into buffer[algorithm[4]]
+					ci.sampleBuffer(to_integer(reg.algorithmIdx(4))) := reg.sampleBuffer(to_integer(reg.algorithmIdx(4))) + op2_output;
+					ci.nxtPhase(2) := '1';
+					ci.state := state_op3;
+				end if;
+			when state_op3 =>
+				-- set input 3 to buffer[algorithm[2]]
+				ci.op3_input := reg.sampleBuffer(to_integer(reg.algorithmIdx(2)));
+				ci.nxtOp(3) := '1';
+				ci.state := state_phase3;
+			when state_phase3 =>
+				-- wait for operator 3 to be valid
+				if(opValid(3) = '1') then
+					-- store output to temporary register
+					ci.output_tmp := op3_output;
+					ci.nxtPhase(3) := '1';
+					ci.state := state_accumulate;
+				end if;
+			when state_accumulate =>
+				-- accumulate buffer[algorithm[5]] into temporary register
+				ci.output_tmp := reg.output_tmp + reg.sampleBuffer(to_integer(reg.algorithmIdx(5)));
+				ci.state := state_output;
+			when state_output =>
+				ci.output := reg.output_tmp;
+				ci.valid := '1';
+				ci.state := state_idle;
 			when others => null;
 		end case;
 	end if;
@@ -330,7 +476,100 @@ begin
 	end if;
 end process SEQ;
 
+OP0: operator_fb port map (
+	clk => clk,
+	rst => rst,
+	
+	nxt => reg.nxtOp(0),
+	fb => reg.feedback,
+	phase => op0_phase,
+	envelope => to_unsigned(361, 16), -- FIXME EG
+	output => op0_output,
+	valid => opValid(0)
+);
+op1_input <= resize(reg.op1_input, 32);
+OP1: operator port map (
+	clk => clk,
+	rst => rst,
+	nxt => reg.nxtOp(1),
+	input => op1_input,
+	phase => op1_phase,
+	envelope => to_unsigned(1330, 16), -- FIXME EG
+	output => op1_output,
+	valid => opValid(1)
+);
+op2_input <= resize(reg.op2_input, 32);
+OP2: operator port map (
+	clk => clk,
+	rst => rst,
+	nxt => reg.nxtOp(2),
+	input => op2_input,
+	phase => op2_phase,
+	envelope => to_unsigned(342, 16), -- FIXME EG
+	output => op2_output,
+	valid => opValid(2)
+);
+op3_input <= resize(reg.op3_input, 32);
+OP3: operator port map (
+	clk => clk,
+	rst => rst,
+	nxt => reg.nxtOp(3),
+	input => op3_input,
+	phase => op3_phase,
+	envelope => to_unsigned(1330, 16), -- FIXME EG
+	output => op3_output,
+	valid => opValid(3)
+);
+
+PHASE0: phase_generator port map (
+	clk => clk,
+	rst => rst,
+	dp => reg.opReg(0).dp,
+	detune => reg.opReg(0).detune,
+	bn => reg.opReg(0).bn,
+	multiple => reg.opReg(0).multiple,
+	update => reg.opUpdate(0),
+	nxt => reg.nxtPhase(0),
+	phase => op0_phase
+);
+PHASE1: phase_generator port map (
+	clk => clk,
+	rst => rst,
+	dp => reg.opReg(1).dp,
+	detune => reg.opReg(1).detune,
+	bn => reg.opReg(1).bn,
+	multiple => reg.opReg(1).multiple,
+	update => reg.opUpdate(1),
+	nxt => reg.nxtPhase(1),
+	phase => op1_phase
+);
+PHASE2: phase_generator port map (
+	clk => clk,
+	rst => rst,
+	dp => reg.opReg(2).dp,
+	detune => reg.opReg(2).detune,
+	bn => reg.opReg(2).bn,
+	multiple => reg.opReg(2).multiple,
+	update => reg.opUpdate(2),
+	nxt => reg.nxtPhase(2),
+	phase => op2_phase
+);
+PHASE3: phase_generator port map (
+	clk => clk,
+	rst => rst,
+	dp => reg.opReg(3).dp,
+	detune => reg.opReg(3).detune,
+	bn => reg.opReg(3).bn,
+	multiple => reg.opReg(3).multiple,
+	update => reg.opUpdate(3),
+	nxt => reg.nxtPhase(3),
+	phase => op3_phase
+);
+
+
 -- outputs
+output <= reg.output;
+valid <= reg.valid;
 
 end Behavioral;
 

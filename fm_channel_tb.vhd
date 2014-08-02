@@ -179,6 +179,18 @@ BEGIN
 		wait for CLK_PERIOD;
 		
 		we <= '0';
+		
+		wait for CLK_PERIOD * 5;
+		
+		-- collect a number of samples...
+		for I in 1 to 10 loop
+			nxt <= '1';
+			wait for CLK_PERIOD;
+			nxt <= '0';
+			wait until valid = '1';
+			wait until valid = '0';
+			wait until falling_edge(clk);
+		end loop;
 
       wait;
    end process;

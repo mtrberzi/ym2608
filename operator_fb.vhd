@@ -109,6 +109,8 @@ begin
 	else
 		-- stage 1
 		ci.input := reg.fb_out + reg.fb_out2;
+		-- weird bug fix, in simulation this shows up as double the correct answer (1 + 0 = 1, etc.)
+		ci.input := resize(ci.input(18 downto 1), 19);
 		if(fb = "00000") then
 			ci.fb := "00000";
 		else
