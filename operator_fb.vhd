@@ -97,9 +97,10 @@ begin
 
 COMB: process(reg, rst, nxt, fb, phase, envelope, sine)
 	variable ci: operator_fb_reg_type;
-	variable input_s: signed(31 downto 0);
+	variable input_tmp: signed(18 downto 0);
 	variable phase_s: signed(32 downto 0);
 	
+	variable input_s: signed(31 downto 0);
 	variable sine_s: signed(9 downto 0);
 	variable env_s: signed(16 downto 0);
 begin
@@ -108,9 +109,9 @@ begin
 		ci := reg_reset;
 	else
 		-- stage 1
-		ci.input := reg.fb_out + reg.fb_out2;
-		-- weird bug fix, in simulation this shows up as double the correct answer (1 + 0 = 1, etc.)
-		ci.input := resize(ci.input(18 downto 1), 19);
+		input_tmp := reg.fb_out + reg.fb_out2;
+		-- weird bug fix, in simulation this otherwise shows up as double the correct answer (1 + 0 = 1, etc.)
+		ci.input := signed(input_tmp(18) & input_tmp(18 downto 1));
 		if(fb = "00000") then
 			ci.fb := "00000";
 		else
@@ -120,8 +121,17 @@ begin
 		ci.envelope := envelope;
 		ci.nxt1 := nxt;
 		-- stage 2
-		input_s := signed(ci.input & "0000000000000"); -- <<13
+		input_s := signed(reg.input & "0000000000000"); -- <<13
 		ci.in_shifted := shift_right(input_s, to_integer(reg.fb));
+		
+		-- CHEATING WITH *BOTH* HANDS THIS TIME:
+--		case reg.fb is
+--			when "00000" => -- no shift
+--				ci.in_shifted := signed(reg.input & "0000000000000"); -- <<13
+--			when others => -- invalid shift amount, or maximum value
+--				ci.in_shifted := to_signed(0, 32);
+--		end case;
+
 		ci.nxt2 := reg.nxt1;
 		-- stage 3
 		phase_s := signed('0' & reg.phase);

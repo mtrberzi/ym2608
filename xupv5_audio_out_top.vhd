@@ -124,15 +124,15 @@ AUDIO_SYNC <= ac97_sync;
 ac97_sdata_in <= AUDIO_SDATA_IN ;
 AUDIO_SDATA_OUT <= ac97_sdata_out;
 
-ICON: chipscope_icon port map ( control0 => control0 );
-ILA: chipscope_ila port map (control => control0,
-	clk => ac97_bit_clk,
-	trig0(0) => ac97_reset,
-	trig0(1) => ac97_sync,
-	trig0(2) => ac97_sdata_in,
-	trig0(3) => ac97_sdata_out,
-	trig0(4) => '0'
-);
+--ICON: chipscope_icon port map ( control0 => control0 );
+--ILA: chipscope_ila port map (control => control0,
+--	clk => ac97_bit_clk,
+--	trig0(0) => ac97_reset,
+--	trig0(1) => ac97_sync,
+--	trig0(2) => ac97_sdata_in,
+--	trig0(3) => ac97_sdata_out,
+--	trig0(4) => '0'
+--);
 
 
 end Behavioral;

@@ -69,14 +69,19 @@ architecture Behavioral of audio_output_top is
 
 	type state_type is (state_reset, state_cold_reset_1, state_cold_reset_2, state_enable_och_1, state_enable_och_2, 
 		state_unmute_master_1, state_unmute_master_2, state_unmute_out_1, state_unmute_out_2,
+		state_opna_1,state_opna_2,state_opna_3,state_opna_4,state_opna_5,state_opna_6,state_opna_7,
 		state_idle,
 		state_output_left_1, state_output_left_2, state_output_right_1, state_output_right_2);
+
+	-- 166 * 48kHz = 7.968MHz
+	constant sample_period: unsigned(7 downto 0) := to_unsigned(166-1, 8);
 
 	type reg_type is record
 		state: state_type;
 		stall_timer: unsigned(15 downto 0);
 		sample_timer: unsigned(7 downto 0);
 		sample_timer_run: std_logic;
+		sample: signed(19 downto 0);
 		nxt: std_logic;
 		addr: std_logic_vector(31 downto 0);
 		data: std_logic_vector(31 downto 0);
@@ -84,31 +89,58 @@ architecture Behavioral of audio_output_top is
 		we: std_logic;
 		cyc: std_logic;
 		stb: std_logic;
+		opna_addr: std_logic_vector(8 downto 0);
+		opna_we: std_logic;
+		opna_data: std_logic_vector(7 downto 0);
 	end record;
 
 	constant reg_reset: reg_type := (
 		state => state_reset,
 		stall_timer => X"0000",
-		sample_timer => X"00",
+		sample_timer => sample_period,
 		sample_timer_run => '0',
+		sample => X"00000",
 		nxt => '0',
 		addr => X"00000000",
 		data => X"00000000",
 		sel => X"0",
 		we => '0',
 		cyc => '0',
-		stb => '0'
+		stb => '0',
+		opna_addr => "000000000",
+		opna_we => '0',
+		opna_data => X"00"
 	);
 	
 	component signal_generator_square port ( 
 		clk : in  STD_LOGIC;
 		nxt : in  STD_LOGIC;
 		sample: out signed(19 downto 0)
+	); end component;	
+	
+	component signal_generator_sampled port ( 
+		clk : in  STD_LOGIC;
+		nxt : in  STD_LOGIC;
+		sample: out signed(19 downto 0)
 	); end component;
 
-	-- 166 * 48kHz = 7.968MHz
-	constant sample_period: unsigned(7 downto 0) := to_unsigned(166-1, 8);
-	signal sample: signed(19 downto 0) := to_signed(0, 20);
+	signal sample: signed(19 downto 0);
+	
+	component fm_channel Port ( 
+		 clk : in  STD_LOGIC;
+		 rst : in  STD_LOGIC;
+		 
+		 addr: in std_logic_vector(8 downto 0);
+		 we: in std_logic;
+		 data: in std_logic_vector(7 downto 0);
+		 
+		 nxt: in std_logic;
+		 output: out signed(17 downto 0);
+		 valid: out std_logic
+	); end component;
+	
+	signal fm_output: signed(17 downto 0);
+	signal fm_valid: std_logic;
 	
 	signal reg: reg_type := reg_reset;
 	signal ci_next: reg_type;
@@ -121,6 +153,7 @@ begin
 	ci := reg;
 	-- self-clearing
 	ci.nxt := '0';
+	ci.opna_we := '0';
 	
 	if(reg.sample_timer_run = '1') then
 		if(reg.sample_timer = X"00") then
@@ -213,21 +246,57 @@ begin
 					ci.cyc := '0';
 					ci.stb := '0';
 					ci.we := '0';
-					ci.sample_timer_run := '1';
-					ci.state := state_idle;
+					ci.state := state_opna_1;
 				end if;
+			when state_opna_1 =>
+				ci.opna_addr := "0" & X"B0";
+				ci.opna_we := '1';
+				ci.opna_data := X"3C";
+				ci.state := state_opna_2;
+			when state_opna_2 =>
+				ci.opna_addr := "0" & X"30";
+				ci.opna_we := '1';
+				ci.opna_data := X"32";
+				ci.state := state_opna_3;
+			when state_opna_3 =>
+				ci.opna_addr := "0" & X"34";
+				ci.opna_we := '1';
+				ci.opna_data := X"72";
+				ci.state := state_opna_4;
+			when state_opna_4 =>
+				ci.opna_addr := "0" & X"38";
+				ci.opna_we := '1';
+				ci.opna_data := X"34";
+				ci.state := state_opna_5;
+			when state_opna_5 =>
+				ci.opna_addr := "0" & X"3C";
+				ci.opna_we := '1';
+				ci.opna_data := X"74";
+				ci.state := state_opna_6;
+			when state_opna_6 =>
+				ci.opna_addr := "0" & X"A4";
+				ci.opna_we := '1';
+				ci.opna_data := std_logic_vector(to_unsigned(26, 8));
+				ci.state := state_opna_7;
+			when state_opna_7 =>
+				ci.opna_addr := "0" & X"A0";
+				ci.opna_we := '1';
+				ci.opna_data := std_logic_vector(to_unsigned(106, 8));
+				ci.sample_timer_run := '1';
+				ci.state := state_idle;
 			when state_idle =>
 				if(reg.sample_timer = X"00") then
 					ci.nxt := '1';
-					-- buffer sample on data-out
-					ci.data(31 downto 20) := (others=>'0');
-					ci.data(19 downto 0) := std_logic_vector(sample);
+					-- buffer sample
+					ci.sample := sample;
 					ci.sel := "1111";
 					ci.cyc := '1';
 					ci.state := state_output_left_1;
 				end if;
 			when state_output_left_1 =>
 				ci.addr(7 downto 0) := X"20";
+				ci.data(31 downto 20) := (others=>'0');
+				ci.data(19 downto 0) := std_logic_vector(reg.sample);
 				ci.stb := '1';
 				ci.we := '1';
 				ci.state := state_output_left_2;
@@ -286,11 +355,37 @@ AC97: ac97_top port map (
 	ac97_reset_pad_o => audio_reset
 );
 
-SIGGEN: signal_generator_square port map (
+CH0: fm_channel port map (
 	clk => clk,
+	rst => rst,
+	addr => reg.opna_addr,
+	we => reg.opna_we,
+	data => reg.opna_data,
 	nxt => reg.nxt,
-	sample => sample
+	output => fm_output,
+	valid => fm_valid
 );
+
+process(clk, rst, fm_output, sample, fm_valid)
+	variable sample_v: signed(19 downto 0);
+begin
+	sample_v := sample;
+	if(fm_valid = '1') then
+		sample_v := signed(fm_output & "00");
+	end if;
+	if(rst = '1') then
+		sample_v := to_signed(0, 20);
+	end if;
+	if(rising_edge(clk)) then
+		sample <= sample_v;
+	end if;
+end process;
+
+--SIGGEN: signal_generator_sampled port map (
+--	clk => clk,
+--	nxt => reg.nxt,
+--	sample => sample
+--);
 
 
 end Behavioral;

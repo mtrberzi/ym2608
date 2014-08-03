@@ -44,8 +44,8 @@ ARCHITECTURE behavior OF audio_out_top_tb IS
          clk : IN  std_logic;
          rst : IN  std_logic;
          audio_bit_clk : IN  std_logic;
-         audio_sdata_in : OUT  std_logic;
-         audio_sdata_out : IN  std_logic;
+         audio_sdata_in : in  std_logic;
+         audio_sdata_out : out  std_logic;
          audio_sync : OUT  std_logic;
          audio_reset : OUT  std_logic
         );
@@ -56,10 +56,10 @@ ARCHITECTURE behavior OF audio_out_top_tb IS
    signal clk : std_logic := '0';
    signal rst : std_logic := '0';
    signal audio_bit_clk : std_logic := '0';
-   signal audio_sdata_out : std_logic := '0';
+   signal audio_sdata_in : std_logic := '0';
 
  	--Outputs
-   signal audio_sdata_in : std_logic;
+	signal audio_sdata_out : std_logic;
    signal audio_sync : std_logic;
    signal audio_reset : std_logic;
 
