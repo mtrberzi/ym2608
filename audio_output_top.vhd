@@ -69,7 +69,6 @@ architecture Behavioral of audio_output_top is
 
 	type state_type is (state_reset, state_cold_reset_1, state_cold_reset_2, state_enable_och_1, state_enable_och_2, 
 		state_unmute_master_1, state_unmute_master_2, state_unmute_out_1, state_unmute_out_2,
-		state_opna_1,state_opna_2,state_opna_3,state_opna_4,state_opna_5,state_opna_6,state_opna_7,
 		state_idle,
 		state_output_left_1, state_output_left_2, state_output_right_1, state_output_right_2);
 
@@ -89,9 +88,7 @@ architecture Behavioral of audio_output_top is
 		we: std_logic;
 		cyc: std_logic;
 		stb: std_logic;
-		opna_addr: std_logic_vector(8 downto 0);
-		opna_we: std_logic;
-		opna_data: std_logic_vector(7 downto 0);
+		playback_start: std_logic;
 	end record;
 
 	constant reg_reset: reg_type := (
@@ -107,9 +104,7 @@ architecture Behavioral of audio_output_top is
 		we => '0',
 		cyc => '0',
 		stb => '0',
-		opna_addr => "000000000",
-		opna_we => '0',
-		opna_data => X"00"
+		playback_start => '0'
 	);
 	
 	component signal_generator_square port ( 
@@ -142,6 +137,33 @@ architecture Behavioral of audio_output_top is
 	signal fm_output: signed(17 downto 0);
 	signal fm_valid: std_logic;
 	
+	component fm2608 port (
+		clk: in std_logic;
+		rst: in std_logic;
+		addr: in std_logic_vector(8 downto 0);
+		we: in std_logic;
+		data: in std_logic_vector(7 downto 0);
+		
+		irq: out std_logic;
+		pcm_out: out signed(17 downto 0);
+		pcm_valid: out std_logic
+	); end component;
+	signal irq: std_logic;
+	
+	component register_playback port ( 
+		clk : in  STD_LOGIC;
+		rst : in  STD_LOGIC;
+		start: in std_logic;
+		irq_timerb: in std_logic;
+		
+		addr: out std_logic_vector(8 downto 0);
+		we: out std_logic;
+		data: out std_logic_vector(7 downto 0)
+	); end component;
+	signal opna_addr: std_logic_vector(8 downto 0);
+	signal opna_we: std_logic;
+	signal opna_data: std_logic_vector(7 downto 0);
+		
 	signal reg: reg_type := reg_reset;
 	signal ci_next: reg_type;
 
@@ -153,7 +175,7 @@ begin
 	ci := reg;
 	-- self-clearing
 	ci.nxt := '0';
-	ci.opna_we := '0';
+	ci.playback_start := '0';
 	
 	if(reg.sample_timer_run = '1') then
 		if(reg.sample_timer = X"00") then
@@ -246,44 +268,10 @@ begin
 					ci.cyc := '0';
 					ci.stb := '0';
 					ci.we := '0';
-					ci.state := state_opna_1;
+					ci.playback_start := '1';
+					ci.sample_timer_run := '1';
+					ci.state := state_idle;
 				end if;
-			when state_opna_1 =>
-				ci.opna_addr := "0" & X"B0";
-				ci.opna_we := '1';
-				ci.opna_data := X"3C";
-				ci.state := state_opna_2;
-			when state_opna_2 =>
-				ci.opna_addr := "0" & X"30";
-				ci.opna_we := '1';
-				ci.opna_data := X"32";
-				ci.state := state_opna_3;
-			when state_opna_3 =>
-				ci.opna_addr := "0" & X"34";
-				ci.opna_we := '1';
-				ci.opna_data := X"72";
-				ci.state := state_opna_4;
-			when state_opna_4 =>
-				ci.opna_addr := "0" & X"38";
-				ci.opna_we := '1';
-				ci.opna_data := X"34";
-				ci.state := state_opna_5;
-			when state_opna_5 =>
-				ci.opna_addr := "0" & X"3C";
-				ci.opna_we := '1';
-				ci.opna_data := X"74";
-				ci.state := state_opna_6;
-			when state_opna_6 =>
-				ci.opna_addr := "0" & X"A4";
-				ci.opna_we := '1';
-				ci.opna_data := std_logic_vector(to_unsigned(26, 8));
-				ci.state := state_opna_7;
-			when state_opna_7 =>
-				ci.opna_addr := "0" & X"A0";
-				ci.opna_we := '1';
-				ci.opna_data := std_logic_vector(to_unsigned(106, 8));
-				ci.sample_timer_run := '1';
-				ci.state := state_idle;
 			when state_idle =>
 				if(reg.sample_timer = X"00") then
 					ci.nxt := '1';
@@ -355,16 +343,38 @@ AC97: ac97_top port map (
 	ac97_reset_pad_o => audio_reset
 );
 
-CH0: fm_channel port map (
+--CH0: fm_channel port map (
+--	clk => clk,
+--	rst => rst,
+--	addr => reg.opna_addr,
+--	we => reg.opna_we,
+--	data => reg.opna_data,
+--	nxt => reg.nxt,
+--	output => fm_output,
+--	valid => fm_valid
+--);
+
+OPNA: fm2608 port map (
 	clk => clk,
 	rst => rst,
-	addr => reg.opna_addr,
-	we => reg.opna_we,
-	data => reg.opna_data,
-	nxt => reg.nxt,
-	output => fm_output,
-	valid => fm_valid
+	addr => opna_addr,
+	we => opna_we,
+	data => opna_data,
+	irq => irq,
+	pcm_out => fm_output,
+	pcm_valid => fm_valid
 );
+
+PLAYBACK: register_playback port map (
+	clk => clk,
+	rst => rst,
+	start => reg.playback_start,
+	irq_timerb => irq,
+	addr => opna_addr,
+	we => opna_we,
+	data => opna_data
+);
+
 
 process(clk, rst, fm_output, sample, fm_valid)
 	variable sample_v: signed(19 downto 0);

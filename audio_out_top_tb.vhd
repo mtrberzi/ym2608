@@ -64,7 +64,8 @@ ARCHITECTURE behavior OF audio_out_top_tb IS
    signal audio_reset : std_logic;
 
    -- Clock period definitions
-   constant clk_period : time := 10 ns;
+   --constant clk_period : time := 10 ns;
+	constant clk_period: time := 125 ns;
    constant audio_bit_clk_period : time := 10 ns;
  
 BEGIN
