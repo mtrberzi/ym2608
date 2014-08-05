@@ -35,17 +35,17 @@ entity pulse_generator is generic (
 ); end pulse_generator;
 
 architecture Behavioral of pulse_generator is
-	signal pulse_counter: unsigned(11 downto 0) := (others => '0');
+	signal pulse_counter: unsigned(12 downto 0) := (others => '0');
 	signal pulse_stb: std_logic := '0';
 begin
 
 process(clk, rst, pulse_counter)
-	variable next_count: unsigned(11 downto 0);
+	variable next_count: unsigned(12 downto 0);
 	variable stb: std_logic;
 begin
 	stb := '0';
-	if(pulse_counter = to_unsigned(0, 12)) then
-		next_count := to_unsigned(N-1, 12);
+	if(pulse_counter = to_unsigned(0, 13)) then
+		next_count := to_unsigned(N-1, 13);
 		stb := '1';
 	else
 		next_count := pulse_counter - 1;

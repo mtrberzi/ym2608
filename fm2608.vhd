@@ -71,6 +71,7 @@ architecture Behavioral of fm2608 is
 		we: in std_logic;
 		data: in std_logic_vector(7 downto 0);
 
+		key: in std_logic_vector(3 downto 0);
 		nxt: in std_logic;
 		output: out signed(17 downto 0);
 		valid: out std_logic
@@ -79,15 +80,20 @@ architecture Behavioral of fm2608 is
 	signal fm_we: std_logic; 
 	-- individual write-enable signals decode addr(8) & addr(1 downto 0)
 	signal fm0_we: std_logic;
+	-- key-on/key-off signals
+	type fm_key_type is array(0 to 5) of std_logic_vector(3 downto 0);
+	
 	signal fm0_output: signed(17 downto 0);
 	signal fm0_valid: std_logic;
 	
 	type reg_type is record
 		timer_control: std_logic_vector(7 downto 0); -- $27
+		fm_key: fm_key_type;
 	end record;
 	
 	constant reg_reset: reg_type := (
-		timer_control => "00000000"
+		timer_control => "00000000",
+		fm_key => (others=>"0000")
 	);
 	
 	signal reg: reg_type := reg_reset;
@@ -104,6 +110,20 @@ begin
 		case addr is
 			when "0" & X"27" => -- Timer control
 				ci.timer_control := data;
+			when "0" & X"28" => -- FM key-on/key-off, ch. 1-3
+				case data(2 downto 0) is
+					when "000" => ci.fm_key(0) := data(7 downto 4);
+					when "010" => ci.fm_key(1) := data(7 downto 4);
+					when "011" => ci.fm_key(2) := data(7 downto 4);
+					when others => null; -- bogus channel
+				end case;
+			when "1" & X"28" => -- FM key-on/key-off, ch. 4-6
+				case data(2 downto 0) is
+					when "000" => ci.fm_key(3) := data(7 downto 4);
+					when "010" => ci.fm_key(4) := data(7 downto 4);
+					when "011" => ci.fm_key(5) := data(7 downto 4);
+					when others => null; -- bogus channel
+				end case;
 			when others => null;
 		end case;
 	end if;
@@ -127,7 +147,7 @@ CLKGEN_SAMPLE: pulse_generator generic map (
 );
 
 CLKGEN_TIMERA: pulse_generator generic map (
-	N => 72
+	N => 72 * 2
 ) port map (
 	clk => clk,
 	rst => rst,
@@ -159,12 +179,10 @@ irq <= timerb_irq;
 FM0: fm_channel port map (
 	clk => clk,
 	rst => rst,
-	-- weird address decoding manipulation
-	addr(8) => '0',
-	addr(7 downto 2) => addr(7 downto 2),
-	addr(1 downto 0) => "00",
+	addr => addr,
 	we => fm0_we,
 	data => data,
+	key => reg.fm_key(0),
 	nxt => sample_tick,
 	output => fm0_output,
 	valid => fm0_valid

@@ -31,7 +31,7 @@ entity operator_fb is port (
 	rst: in std_logic;
 	
 	nxt: in std_logic;
-	fb: unsigned(4 downto 0);
+	fb: in unsigned(4 downto 0);
 	phase: in unsigned(31 downto 0);
 	envelope: in unsigned(15 downto 0);
 	
@@ -109,9 +109,10 @@ begin
 		ci := reg_reset;
 	else
 		-- stage 1
-		input_tmp := reg.fb_out + reg.fb_out2;
 		-- weird bug fix, in simulation this otherwise shows up as double the correct answer (1 + 0 = 1, etc.)
-		ci.input := signed(input_tmp(18) & input_tmp(18 downto 1));
+		--input_tmp := reg.fb_out + reg.fb_out2;
+		--ci.input := signed(input_tmp(18) & input_tmp(18 downto 1));
+		ci.input := reg.fb_out + reg.fb_out2;
 		if(fb = "00000") then
 			ci.fb := "00000";
 		else
