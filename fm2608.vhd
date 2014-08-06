@@ -110,18 +110,14 @@ begin
 		case addr is
 			when "0" & X"27" => -- Timer control
 				ci.timer_control := data;
-			when "0" & X"28" => -- FM key-on/key-off, ch. 1-3
+			when "0" & X"28" => -- FM key-on/key-off
 				case data(2 downto 0) is
 					when "000" => ci.fm_key(0) := data(7 downto 4);
-					when "010" => ci.fm_key(1) := data(7 downto 4);
-					when "011" => ci.fm_key(2) := data(7 downto 4);
-					when others => null; -- bogus channel
-				end case;
-			when "1" & X"28" => -- FM key-on/key-off, ch. 4-6
-				case data(2 downto 0) is
-					when "000" => ci.fm_key(3) := data(7 downto 4);
-					when "010" => ci.fm_key(4) := data(7 downto 4);
-					when "011" => ci.fm_key(5) := data(7 downto 4);
+					when "001" => ci.fm_key(1) := data(7 downto 4);
+					when "010" => ci.fm_key(2) := data(7 downto 4);
+					when "100" => ci.fm_key(3) := data(7 downto 4);
+					when "101" => ci.fm_key(4) := data(7 downto 4);
+					when "110" => ci.fm_key(5) := data(7 downto 4);
 					when others => null; -- bogus channel
 				end case;
 			when others => null;

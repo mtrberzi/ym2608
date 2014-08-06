@@ -112,7 +112,7 @@ begin
 		-- weird bug fix, in simulation this otherwise shows up as double the correct answer (1 + 0 = 1, etc.)
 		--input_tmp := reg.fb_out + reg.fb_out2;
 		--ci.input := signed(input_tmp(18) & input_tmp(18 downto 1));
-		ci.input := reg.fb_out + reg.fb_out2;
+		ci.input := signed(reg.fb_out(17) & reg.fb_out) + reg.fb_out2;
 		if(fb = "00000") then
 			ci.fb := "00000";
 		else

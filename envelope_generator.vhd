@@ -120,7 +120,7 @@ COMB: process(reg, rst, update, nxt, keyOn,
 	attackRate, decayRate, sustainRate, sustainLevel, releaseRate, keyscale, blockNumber)
 	variable ci: reg_type;
 	
-	variable egtransa: unsigned(3 downto 0);
+	variable egtransa: unsigned(5 downto 0);
 	variable egtransa_sized: unsigned(3 downto 0);
 	variable egtransd: unsigned(3 downto 0);
 	

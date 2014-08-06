@@ -765,20 +765,21 @@ begin
 					ci.opParam(3).sustainRate := unsigned(data(4 downto 0) & "0");
 					ci.paramChanged(3) := '1';
 				-- SL/RR (forces a parameter update)
+				-- FIXME check the bit-accuracy of SL here
 				when X"80" =>
-					ci.opParam(0).sustainLevel := unsigned(data(7 downto 4) & "00"); -- sl * 4
+					ci.opParam(0).sustainLevel := unsigned("0" & data(7 downto 4) & "00"); -- sl * 4
 					ci.opParam(0).releaseRate := unsigned(data(3 downto 0) & "10"); -- rr * 4 + 2
 					ci.paramChanged(0) := '1';
 				when X"84" =>
-					ci.opParam(2).sustainLevel := unsigned(data(7 downto 4) & "00"); -- sl * 4
+					ci.opParam(2).sustainLevel := unsigned("0" & data(7 downto 4) & "00"); -- sl * 4
 					ci.opParam(2).releaseRate := unsigned(data(3 downto 0) & "10"); -- rr * 4 + 2
 					ci.paramChanged(2) := '1';
 				when X"88" =>
-					ci.opParam(1).sustainLevel := unsigned(data(7 downto 4) & "00"); -- sl * 4
+					ci.opParam(1).sustainLevel := unsigned("0" & data(7 downto 4) & "00"); -- sl * 4
 					ci.opParam(1).releaseRate := unsigned(data(3 downto 0) & "10"); -- rr * 4 + 2
 					ci.paramChanged(1) := '1';
 				when X"8C" =>
-					ci.opParam(3).sustainLevel := unsigned(data(7 downto 4) & "00"); -- sl * 4
+					ci.opParam(3).sustainLevel := unsigned("0" & data(7 downto 4) & "00"); -- sl * 4
 					ci.opParam(3).releaseRate := unsigned(data(3 downto 0) & "10"); -- rr * 4 + 2
 					ci.paramChanged(3) := '1';
 				-- TODO (SSG-EG)
