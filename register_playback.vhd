@@ -49,17 +49,17 @@ architecture Behavioral of register_playback is
 		addr: std_logic_vector(8 downto 0);
 		we: std_logic;
 		data: std_logic_vector(7 downto 0);
-		rom_addr: std_logic_vector(15 downto 0);
+		rom_addr: std_logic_vector(17 downto 0);
 		rom_data: std_logic_vector(17 downto 0);
 	end record;
 	
 	component playback_rom port (
 		clka: in std_logic;
-		addra: in std_logic_vector(15 downto 0);
+		addra: in std_logic_vector(17 downto 0);
 		douta: out std_logic_vector(17 downto 0)
 	); end component; 
 	
-	signal rom_addr: std_logic_vector(15 downto 0);
+	signal rom_addr: std_logic_vector(17 downto 0);
 	-- ROM data format:
 	-- (17) = wait-for-IRQ flag
 	-- (16 downto 8) = addr
@@ -81,8 +81,8 @@ begin
 
 COMB: process(reg, rst, start, irq_timerb, rom_data)
 	variable ci: reg_type;
-	variable next_rom_addr_u: unsigned(15 downto 0);
-	variable next_rom_addr: std_logic_vector(15 downto 0);
+	variable next_rom_addr_u: unsigned(17 downto 0);
+	variable next_rom_addr: std_logic_vector(17 downto 0);
 begin
 	ci := reg;
 	-- self-clearing
