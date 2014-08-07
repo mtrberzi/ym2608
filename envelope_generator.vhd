@@ -77,7 +77,10 @@ architecture Behavioral of envelope_generator is
 	type reg_type is record
 		state: eg_state_type;
 		adsr_state: adsr_state_type;
+		keyOff_req: std_logic;
+		keyOn_req: std_logic;
 		egstep: signed(31 downto 0);
+		update_req: std_logic;
 		update_ack: std_logic;
 		key: std_logic;
 		ksr: unsigned(4 downto 0);
@@ -90,13 +93,17 @@ architecture Behavioral of envelope_generator is
 		shiftphase_callback: eg_state_type; -- where to go after ShiftPhase
 		eglevel: unsigned(9 downto 0);
 		eglvnext: unsigned(9 downto 0);
+		nxt_req: std_logic; -- latched high when nxt is strobed
 		valid: std_logic;
 	end record;
 	
 	constant reg_reset: reg_type := (
 		state => state_idle,
 		adsr_state => adsr_off,
+		keyOff_req => '0',
+		keyOn_req => '0',
 		egstep => to_signed(0, 32),
+		update_req => '0',
 		update_ack => '0',
 		key => '0',
 		ksr => "00000",
@@ -109,6 +116,7 @@ architecture Behavioral of envelope_generator is
 		shiftphase_callback => state_idle,
 		eglevel => "0011111111",
 		eglvnext => to_unsigned(0, 10),
+		nxt_req => '0',
 		valid => '0'
 	);
 	
@@ -130,6 +138,22 @@ begin
 	-- self-clearing
 	ci.update_ack := '0';
 	ci.valid := '0';
+	
+	-- always check these "asynchronously", i.e. while other processing is happening
+	if(reg.key = '1' and keyOn = '0') then
+		ci.key := '0';
+		ci.keyOff_req := '1';
+	end if;
+	if(reg.key = '0' and keyOn = '1') then
+		ci.key := '1';
+		ci.keyOn_req := '1';
+	end if;
+	if(reg.update_req = '0' and update = '1') then
+		ci.update_req := '1';
+	end if;
+	if(reg.nxt_req = '0' and nxt = '1') then
+		ci.nxt_req := '1';
+	end if;
 	
 	-- egtransa = Limit(15 - r>>2, 4, 1)
 	egtransa := 15 - shift_right(reg.egrate, 2);
@@ -160,35 +184,34 @@ begin
 	else
 		case reg.state is
 			when state_idle =>
-				-- we are guaranteed that at most one of these will happen simultaneously
-				if(update = '1') then
+				-- check for key-on/key-off first; key-off has priority
+				if(reg.keyOff_req = '1') then
+					ci.keyOff_req := '0';
+					-- Key Off
+					ci.shiftphase := adsr_release;
+					ci.state := state_shiftphase;
+					ci.shiftphase_callback := state_idle;
+				elsif(reg.keyOn_req = '1') then
+					ci.keyOn_req := '0';
+					-- Key On
+					if(reg.adsr_state = adsr_off or reg.adsr_state = adsr_release) then
+						ci.shiftphase := adsr_attack;
+						ci.state := state_shiftphase;
+						ci.shiftphase_callback := state_idle;
+					else
+						ci.state := state_envelope_check;
+					end if;
+				elsif(reg.update_req = '1') then
+					ci.update_req := '0';
 					-- calculate ksr (key-scale rate)
 					-- ksr = bn >> (3 - ks)
 					ci.ksr := shift_right(blockNumber, to_integer(keyscale));
 					ci.state := state_prepare_rate;
-				elsif(nxt = '1') then
+				elsif(reg.nxt_req = '1') then
+					ci.nxt_req := '0';
 					-- decrement egstep
 					ci.egstep := reg.egstep - reg.egstepd;
-					-- check for key-on/key-off
-					if(keyOn = '1' and reg.key = '0') then
-						-- Key On
-						ci.key := '1';
-						if(reg.adsr_state = adsr_off or reg.adsr_state = adsr_release) then
-							ci.shiftphase := adsr_attack;
-							ci.state := state_shiftphase;
-							ci.shiftphase_callback := state_envelope_check;
-						else
-							ci.state := state_envelope_check;
-						end if;
-					elsif(keyOn = '0' and reg.key = '1') then
-						-- Key Off
-						ci.key := '0';
-						ci.shiftphase := adsr_release;
-						ci.state := state_shiftphase;
-						ci.shiftphase_callback := state_envelope_check;
-					else
-						ci.state := state_envelope_check;
-					end if;
+					ci.state := state_envelope_check;
 				end if;
 			when state_setegrate => -- "function call"
 				ci.egstepd := ratetable(to_integer(reg.egrate));

@@ -527,7 +527,6 @@ architecture Behavioral of fm_channel is
 		feedback: unsigned(4 downto 0);
 		sampleBuffer: buffer4_type;
 		algorithmIdx: algorithm_idx_type;
-		key: std_logic_vector(3 downto 0);
 		opParam: operator4_reg_type; -- exposed register space for operator parameters
 		paramChanged: std_logic_vector(3 downto 0); -- flags for each operator
 		opUpdate: std_logic_vector(3 downto 0); -- strobed high when preparing channel to request EG/PG reload
@@ -551,7 +550,6 @@ architecture Behavioral of fm_channel is
 		feedback => to_unsigned(1, 5), -- FIXME check this
 		sampleBuffer => buffer4_reset,
 		algorithmIdx => algorithm0,
-		key => "0000",
 		opParam => (others => operator_reg_reset),
 		paramChanged => "0000",
 		opUpdate => "0000",
@@ -575,6 +573,7 @@ architecture Behavioral of fm_channel is
 		clk: in std_logic;
 		rst: in std_logic;
 		
+		key: in std_logic;
 		nxt: in std_logic;
 		fb: in unsigned(4 downto 0);
 		phase: in unsigned(31 downto 0);
@@ -651,7 +650,7 @@ architecture Behavioral of fm_channel is
 	signal op3_output: signed(17 downto 0);
 begin
 
-COMB: process(reg, rst, addr, we, data, key,
+COMB: process(reg, rst, addr, we, data,
 	envelopeUpdateAck, envelopeValid, eglevel,
 	nxt, opValid, op0_output, op1_output, op2_output, op3_output)
 	variable ci: channel_reg_type;
@@ -822,14 +821,6 @@ begin
 							ci.envelopeUpdateAck(I) := '1';
 						end if;
 					end loop;
-					ci.key := key;
-					for I in 0 to 3 loop
-						-- a change in key level counts as a parameter change
-						if(reg.key(I) /= key(I)) then
-							ci.opUpdate(I) := '1';
-							ci.envelopeUpdateAck(I) := '0';
-						end if;
-					end loop;
 					ci.sampleBuffer := buffer4_reset;
 					ci.state := state_prepare;
 				end if;
@@ -935,6 +926,7 @@ OP0: operator_fb port map (
 	clk => clk,
 	rst => rst,
 	
+	key => key(0),
 	nxt => reg.nxtOp(0),
 	fb => reg.feedback,
 	phase => op0_phase,
@@ -1028,7 +1020,7 @@ ENVELOPE_GENERATORS: for I in 0 to 3 generate
 		
 		update => reg.opUpdate(I),
 		update_ack => envelopeUpdateAck(I),
-		keyOn => reg.key(I),
+		keyOn => key(I),
 		attackRate => reg.opReg(I).attackRate,
 		decayRate => reg.opReg(I).decayRate,
 		sustainRate => reg.opReg(I).sustainRate,

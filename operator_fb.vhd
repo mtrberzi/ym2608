@@ -30,6 +30,7 @@ entity operator_fb is port (
 	clk: in std_logic;
 	rst: in std_logic;
 	
+	key: in std_logic;
 	nxt: in std_logic;
 	fb: in unsigned(4 downto 0);
 	phase: in unsigned(31 downto 0);
@@ -51,6 +52,7 @@ architecture Behavioral of operator_fb is
 	signal sine: std_logic_vector(9 downto 0);
 	
 	type operator_fb_reg_type is record
+		keyOn_req: std_logic;
 		-- feedback state
 		fb_out: signed(17 downto 0);
 		fb_out2: signed(17 downto 0);
@@ -74,6 +76,7 @@ architecture Behavioral of operator_fb is
 	end record;
 	
 	constant reg_reset: operator_fb_reg_type := (
+		keyOn_req => '0',
 		fb_out => to_signed(0, 18),
 		fb_out2 => to_signed(0, 18),
 		input => to_signed(0, 19),
@@ -95,7 +98,7 @@ architecture Behavioral of operator_fb is
 	
 begin
 
-COMB: process(reg, rst, nxt, fb, phase, envelope, sine)
+COMB: process(reg, rst, key, nxt, fb, phase, envelope, sine)
 	variable ci: operator_fb_reg_type;
 	variable input_tmp: signed(18 downto 0);
 	variable phase_s: signed(32 downto 0);
@@ -108,6 +111,9 @@ begin
 	if(rst = '1') then
 		ci := reg_reset;
 	else
+		if(reg.keyOn_req = '0' and key = '1') then
+			ci.keyOn_req := '1';
+		end if;
 		-- stage 1
 		-- weird bug fix, in simulation this otherwise shows up as double the correct answer (1 + 0 = 1, etc.)
 		--input_tmp := reg.fb_out + reg.fb_out2;
@@ -153,6 +159,10 @@ begin
 		if(reg.nxt4 = '1') then
 			ci.fb_out2 := reg.fb_out;
 			ci.fb_out := reg.sample(25 downto 8);
+		elsif(reg.keyOn_req = '1') then
+			ci.keyOn_req := '0';
+			ci.fb_out := to_signed(0, 18);
+			ci.fb_out2 := to_signed(0, 18);
 		end if;
 	end if;
 	ci_next <= ci;
