@@ -32,8 +32,10 @@ entity mixer2 is Port (
 	
 	A_in: in signed(21 downto 0);
 	A_valid: in std_logic;
+	A_mute: in std_logic;
 	B_in: in signed(21 downto 0);
 	B_valid: in std_logic;
+	B_mute: in std_logic;
 	
 	mix_out: out signed(21 downto 0);
 	mix_valid: out std_logic
@@ -63,35 +65,50 @@ architecture Behavioral of mixer2 is
 	signal ci_next: reg_type;
 begin
 
-COMB: process(reg, rst, A_in, A_valid, B_in, B_valid)
+COMB: process(reg, rst, A_in, A_valid, B_in, B_valid, A_mute, B_mute)
 	variable ci: reg_type;
+	variable A_mask: signed(22 downto 0);
+	variable B_mask: signed(22 downto 0);
 begin
 	ci := reg;
 	-- self-clearing
 	ci.valid := '0';
+	
+	if(A_mute = '1') then
+		A_mask := to_signed(0, 23);
+	else
+		A_mask := signed(A_in(21) & A_in);
+	end if;
+	
+	if(B_mute = '1') then	
+		B_mask := to_signed(0, 23);
+	else
+		B_mask := signed(B_in(21) & B_in);
+	end if;
+	
 	if(rst = '1') then
 		ci := reg_reset;
 	else
 		case reg.state is
 			when state_idle =>
 				if(A_valid = '1' and B_valid = '1') then
-					ci.accumulator := signed(A_in(21) & A_in) + B_in;
+					ci.accumulator := A_mask + B_mask;
 					ci.state := state_limit;
 				elsif(A_valid = '1' and B_valid = '0') then
-					ci.accumulator := signed(A_in(21) & A_in);
+					ci.accumulator := A_mask;
 					ci.state := state_b;
 				elsif(A_valid = '0' and B_valid = '1') then
-					ci.accumulator := signed(B_in(21) & B_in);
+					ci.accumulator := B_mask;
 					ci.state := state_a;
 				end if;
 			when state_a =>
 				if(A_valid = '1') then
-					ci.accumulator := reg.accumulator + A_in;
+					ci.accumulator := reg.accumulator + A_mask;
 					ci.state := state_limit;
 				end if;
 			when state_b =>
 				if(B_valid = '1') then
-					ci.accumulator := reg.accumulator + B_in;
+					ci.accumulator := reg.accumulator + B_mask;
 					ci.state := state_limit;
 				end if;
 			when state_limit =>

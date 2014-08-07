@@ -34,6 +34,7 @@ entity fm2608 is port (
 	we: in std_logic;
 	data: in std_logic_vector(7 downto 0);
 	-- TODO external channel hard-masking
+	mute_fm: in std_logic_vector(5 downto 0); -- channel mute for FM
 	
 	irq: out std_logic;
 	pcm_out: out signed(17 downto 0);
@@ -109,8 +110,10 @@ architecture Behavioral of fm2608 is
 		
 		A_in: in signed(21 downto 0);
 		A_valid: in std_logic;
+		A_mute: in std_logic;
 		B_in: in signed(21 downto 0);
 		B_valid: in std_logic;
+		B_mute: in std_logic;
 		
 		mix_out: out signed(21 downto 0);
 		mix_valid: out std_logic
@@ -322,8 +325,10 @@ MIXER_FM01: mixer2 port map (
 	rst => rst,
 	A_in => mix_fm0,
 	A_valid => fm0_valid,
+	A_mute => mute_fm(0),
 	B_in => mix_fm1,
 	B_valid => fm1_valid,
+	B_mute => mute_fm(1),
 	mix_out => mix_fm01,
 	mix_valid => mix_fm01_valid
 );
@@ -332,8 +337,10 @@ MIXER_FM23: mixer2 port map (
 	rst => rst,
 	A_in => mix_fm2,
 	A_valid => fm2_valid,
+	A_mute => mute_fm(2),
 	B_in => mix_fm3,
 	B_valid => fm3_valid,
+	B_mute => mute_fm(3),
 	mix_out => mix_fm23,
 	mix_valid => mix_fm23_valid
 );
@@ -342,8 +349,10 @@ MIXER_FM45: mixer2 port map (
 	rst => rst,
 	A_in => mix_fm4,
 	A_valid => fm4_valid,
+	A_mute => mute_fm(4),
 	B_in => mix_fm5,
 	B_valid => fm5_valid,
+	B_mute => mute_fm(5),
 	mix_out => mix_fm45,
 	mix_valid => mix_fm45_valid
 );
@@ -356,6 +365,8 @@ MIXER_FM0123: mixer2 port map (
 	A_valid => mix_fm01_valid,
 	B_in => mix_fm23,
 	B_valid => mix_fm23_valid,
+	A_mute => '0',
+	B_mute => '0',
 	mix_out => mix_fm0123,
 	mix_valid => mix_fm0123_valid
 );
@@ -366,6 +377,8 @@ MIXER_FM45SSG01: mixer2 port map (
 	A_valid => mix_fm45_valid,
 	B_in => (others=>'0'), -- TODO mix from SSG0/1
 	B_valid => mix_fm45_valid,
+	A_mute => '0',
+	B_mute => '0',
 	mix_out => mix_fm45ssg01,
 	mix_valid => mix_fm45ssg01_valid
 );
@@ -378,6 +391,8 @@ MIXER_FMSSG01: mixer2 port map (
 	A_valid => mix_fm0123_valid,
 	B_in => mix_fm45ssg01,
 	B_valid => mix_fm45ssg01_valid,
+	A_mute => '0',
+	B_mute => '0',
 	mix_out => mix_fmssg01,
 	mix_valid => mix_fmssg01_valid
 );

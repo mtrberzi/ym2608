@@ -33,6 +33,7 @@ entity xupv5_audio_out_top is port (
 	CLK_33MHZ: in std_logic;
 	CPU_RESET_B: in std_logic;
 	LED_GPIO: out std_logic_vector(7 downto 0);
+	GPIO_DIP_SW: in std_logic_vector(7 downto 0);
 	AUDIO_BIT_CLK: in std_logic;
 	AUDIO_SDATA_IN: in std_logic;
 	AUDIO_SDATA_OUT: out std_logic;
@@ -52,6 +53,8 @@ architecture Behavioral of xupv5_audio_out_top is
 	component audio_output_top Port ( 
 		clk : in  STD_LOGIC; -- about 8 MHz (7.968MHz should be okay)
 		rst : in  STD_LOGIC;
+		
+		mute_fm: in std_logic_vector(5 downto 0);
 		
 		-- AC97
 		audio_bit_clk: in std_logic;
@@ -76,6 +79,8 @@ architecture Behavioral of xupv5_audio_out_top is
 		trig0: in std_logic_vector(4 downto 0)
 	); end component;
 	
+	signal mute_fm: std_logic_vector(5 downto 0);
+	
 	signal ac97_reset: std_logic;
 	signal ac97_bit_clk: std_logic;
 	signal ac97_sdata_in: std_logic;
@@ -94,6 +99,18 @@ LED_GPIO(5) <= '0';
 LED_GPIO(6) <= '0';
 LED_GPIO(7) <= locked;
 
+SYNC_GPIO: process(clk, GPIO_DIP_SW)
+begin
+	if(rising_edge(clk)) then
+		mute_fm(0) <= GPIO_DIP_SW(0);
+		mute_fm(1) <= GPIO_DIP_SW(1);
+		mute_fm(2) <= GPIO_DIP_SW(2);
+		mute_fm(3) <= GPIO_DIP_SW(3);
+		mute_fm(4) <= GPIO_DIP_SW(4);
+		mute_fm(5) <= GPIO_DIP_SW(5);
+	end if;
+end process SYNC_GPIO;
+
 PLL: clksynth port map (
 	CLKIN1_IN => CLK_33MHZ,
 	RST_IN => rst_async,
@@ -111,6 +128,7 @@ end process SYNC_RST;
 AUDIO_OUT: audio_output_top port map (
 	clk => clk,
 	rst => rst,
+	mute_fm => mute_fm,
 	audio_bit_clk => ac97_bit_clk,
 	audio_sdata_in => ac97_sdata_in,
 	audio_sdata_out => ac97_sdata_out,

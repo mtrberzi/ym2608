@@ -43,6 +43,7 @@ ARCHITECTURE behavior OF audio_out_top_tb IS
     PORT(
          clk : IN  std_logic;
          rst : IN  std_logic;
+			mute_fm: in std_logic_vector(5 downto 0);
          audio_bit_clk : IN  std_logic;
          audio_sdata_in : in  std_logic;
          audio_sdata_out : out  std_logic;
@@ -74,6 +75,7 @@ BEGIN
    uut: audio_output_top PORT MAP (
           clk => clk,
           rst => rst,
+			 mute_fm => "000000",
           audio_bit_clk => audio_bit_clk,
           audio_sdata_in => audio_sdata_in,
           audio_sdata_out => audio_sdata_out,

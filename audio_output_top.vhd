@@ -30,6 +30,9 @@ entity audio_output_top is Port (
 	clk : in  STD_LOGIC; -- about 8 MHz (7.968MHz should be okay)
    rst : in  STD_LOGIC;
 	
+	-- hardware mute for OPNA
+	mute_fm: in std_logic_vector(5 downto 0);
+	
 	-- AC97
 	audio_bit_clk: in std_logic;
 	audio_sdata_in: in std_logic; -- from codec
@@ -143,6 +146,7 @@ architecture Behavioral of audio_output_top is
 		addr: in std_logic_vector(8 downto 0);
 		we: in std_logic;
 		data: in std_logic_vector(7 downto 0);
+		mute_fm: in std_logic_vector(5 downto 0);
 		
 		irq: out std_logic;
 		pcm_out: out signed(17 downto 0);
@@ -360,6 +364,7 @@ OPNA: fm2608 port map (
 	addr => opna_addr,
 	we => opna_we,
 	data => opna_data,
+	mute_fm => mute_fm,
 	irq => irq,
 	pcm_out => fm_output,
 	pcm_valid => fm_valid
